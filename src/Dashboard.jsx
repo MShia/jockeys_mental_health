@@ -758,8 +758,8 @@ export default function Dashboard() {
 
   // ─── WORD DOCUMENT EXPORT ───
   const exportWord = useCallback(async () => {
-    if (!rawData || !rawData.length) return;
-    const allData = rawData; // use full unfiltered dataset for publication tables
+    if (!data || !data.length) return;
+    const allData = data; // use current filtered dataset
     const irlData = allData.filter((r) => String(r.primary_race_location) === "1");
     const gbData = allData.filter((r) => String(r.primary_race_location) === "2");
     const groups = [
@@ -767,6 +767,7 @@ export default function Dashboard() {
       { label: "Ireland", data: irlData },
       { label: "Great Britain", data: gbData },
     ];
+    const isFiltered = data.length !== rawData.length;
 
     const border = { style: BorderStyle.SINGLE, size: 1, color: "999999" };
     const borders = { top: border, bottom: border, left: border, right: border };
@@ -969,7 +970,17 @@ export default function Dashboard() {
         },
         children: [
           new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: "Jockey Mental Wellbeing Survey — Summary Tables", bold: true })] }),
-          new Paragraph({ children: [new TextRun({ text: `Generated: ${new Date().toLocaleDateString()} | N = ${allData.length} (Ireland: ${irlData.length}, Great Britain: ${gbData.length})`, size: 18, color: "666666", italics: true })] }),
+          new Paragraph({ children: [new TextRun({ text: `Generated: ${new Date().toLocaleDateString()} | N = ${allData.length}${isFiltered ? ` of ${rawData.length} (filtered)` : ""} (Ireland: ${irlData.length}, Great Britain: ${gbData.length})`, size: 18, color: "666666", italics: true })] }),
+          new Paragraph({ children: [new TextRun({ text: `Filters applied: ${(() => {
+            const parts = [];
+            if (filters.gender !== "all") parts.push(`Gender: ${GENDER_MAP[filters.gender] || filters.gender}`);
+            if (filters.education !== "all") parts.push(`Education: ${EDUCATION_MAP[filters.education] || filters.education}`);
+            if (filters.location !== "all") parts.push(`Location: ${LOCATION_MAP[filters.location] || filters.location}`);
+            if (filters.licence.length > 0) parts.push(`Licence: ${filters.licence.map((v) => LICENCE_MAP[v] || v).join(", ")}`);
+            if (filters.ageMin) parts.push(`Age ≥ ${filters.ageMin}`);
+            if (filters.ageMax) parts.push(`Age ≤ ${filters.ageMax}`);
+            return parts.length ? parts.join("; ") : "None (full sample)";
+          })()}`, size: 18, color: "666666", italics: true })] }),
 
           sectionTitle("Table 1. Demographic Characteristics"),
           sectionNote("Values are mean (SD) and range for continuous variables; n (%) for categorical variables."),
@@ -1001,7 +1012,7 @@ export default function Dashboard() {
     });
     const blob = await Packer.toBlob(doc);
     saveAs(blob, "Jockey_Wellbeing_Tables.docx");
-  }, [rawData, cmdCutoffs, activeCope, copeMode]);
+  }, [data, rawData, cmdCutoffs, activeCope, copeMode, filters]);
 
   // ─── Shared docx helpers for regression exports ───
   const docxBorder = { style: BorderStyle.SINGLE, size: 1, color: "999999" };
