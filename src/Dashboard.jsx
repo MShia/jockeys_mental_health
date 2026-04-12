@@ -393,6 +393,43 @@ const CheckList = ({ items, selected, onChange, columns = 2 }) => (
   </div>
 );
 
+const MultiSelect = ({ label, map, selected, onChange }) => {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    const onClick = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, []);
+  const entries = Object.entries(map);
+  const summary = selected.length === 0 || selected.length === entries.length ? "All" : selected.length === 1 ? (map[selected[0]] || selected[0]) : `${selected.length} selected`;
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <button type="button" onClick={() => setOpen((o) => !o)}
+        style={{ background: "#0f172a", color: "#e2e8f0", border: "1px solid #334155", borderRadius: 6, padding: "6px 10px", fontSize: 12, cursor: "pointer", minWidth: 150, textAlign: "left", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+        <span>{label}: <span style={{ color: selected.length ? "#5eead4" : "#94a3b8", fontWeight: selected.length ? 600 : 400 }}>{summary}</span></span>
+        <span style={{ color: "#64748b", fontSize: 10 }}>▼</span>
+      </button>
+      {open && (
+        <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, minWidth: 240, background: "#1e293b", border: "1px solid #334155", borderRadius: 8, padding: 8, zIndex: 100, boxShadow: "0 8px 24px rgba(0,0,0,.4)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, paddingBottom: 4, borderBottom: "1px solid #334155" }}>
+            <button type="button" onClick={() => onChange([])} style={{ background: "none", border: "none", color: "#94a3b8", fontSize: 11, cursor: "pointer", padding: 0 }}>Clear</button>
+            <button type="button" onClick={() => onChange(entries.map(([k]) => k))} style={{ background: "none", border: "none", color: "#5eead4", fontSize: 11, cursor: "pointer", padding: 0 }}>Select All</button>
+          </div>
+          {entries.map(([k, v]) => (
+            <label key={k} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "4px 2px", color: "#cbd5e1", fontSize: 12 }}>
+              <input type="checkbox" checked={selected.includes(k)} onChange={() => {
+                onChange(selected.includes(k) ? selected.filter((x) => x !== k) : [...selected, k]);
+              }} style={{ accentColor: "#0f766e" }} />
+              <span>{v}</span>
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const TT = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   return (
@@ -408,7 +445,7 @@ export default function Dashboard() {
   const [rawData, setRawData] = useState(null);
   const [columns, setColumns] = useState([]);
   const [tab, setTab] = useState("overview");
-  const [filters, setFilters] = useState({ gender: "all", education: "all", location: "all", licence: "all", ageMin: "", ageMax: "" });
+  const [filters, setFilters] = useState({ gender: "all", education: "all", location: "all", licence: [], ageMin: "", ageMax: "" });
   // Editable CMD cutoffs (defaults from CMD_SCALES)
   const [cmdCutoffs, setCmdCutoffs] = useState(() => {
     const obj = {};
@@ -485,7 +522,7 @@ export default function Dashboard() {
       if (filters.gender !== "all" && String(r.gender) !== filters.gender) return false;
       if (filters.education !== "all" && String(r.education_level) !== filters.education) return false;
       if (filters.location !== "all" && String(r.primary_race_location) !== filters.location) return false;
-      if (filters.licence !== "all" && String(r.licence_type) !== filters.licence) return false;
+      if (filters.licence.length > 0 && !filters.licence.includes(String(r.licence_type))) return false;
       if (filters.ageMin && num(r.age) !== null && num(r.age) < Number(filters.ageMin)) return false;
       if (filters.ageMax && num(r.age) !== null && num(r.age) > Number(filters.ageMax)) return false;
       return true;
@@ -992,7 +1029,7 @@ export default function Dashboard() {
     if (filters.gender !== "all") parts.push(`Gender: ${GENDER_MAP[filters.gender] || filters.gender}`);
     if (filters.education !== "all") parts.push(`Education: ${EDUCATION_MAP[filters.education] || filters.education}`);
     if (filters.location !== "all") parts.push(`Location: ${LOCATION_MAP[filters.location] || filters.location}`);
-    if (filters.licence !== "all") parts.push(`Licence: ${LICENCE_MAP[filters.licence] || filters.licence}`);
+    if (filters.licence.length > 0) parts.push(`Licence: ${filters.licence.map((v) => LICENCE_MAP[v] || v).join(", ")}`);
     if (filters.ageMin) parts.push(`Age ≥ ${filters.ageMin}`);
     if (filters.ageMax) parts.push(`Age ≤ ${filters.ageMax}`);
     return parts.length ? parts.join("; ") : "None (full sample)";
@@ -1332,14 +1369,13 @@ export default function Dashboard() {
         </div>
 
         {/* Filters */}
-        <Card style={{ padding: 14 }}>
+        <Card style={{ padding: 14, overflow: "visible" }}>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", fontSize: 12 }}>
             <span style={{ color: "#5eead4", fontWeight: 700, fontSize: 11, textTransform: "uppercase", letterSpacing: 1 }}>Filters</span>
             {[
               { key: "gender", label: "Gender", map: GENDER_MAP },
               { key: "education", label: "Education", map: EDUCATION_MAP },
               { key: "location", label: "Location", map: LOCATION_MAP },
-              { key: "licence", label: "Licence", map: LICENCE_MAP },
             ].map(({ key, label, map }) => (
               <select key={key} value={filters[key]} onChange={(e) => setFilters((f) => ({ ...f, [key]: e.target.value }))}
                 style={{ background: "#0f172a", color: "#e2e8f0", border: "1px solid #334155", borderRadius: 6, padding: "6px 10px", fontSize: 12 }}>
@@ -1347,6 +1383,9 @@ export default function Dashboard() {
                 {Object.entries(map).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
               </select>
             ))}
+            <MultiSelect label="Licence" map={LICENCE_MAP}
+              selected={filters.licence}
+              onChange={(vals) => setFilters((f) => ({ ...f, licence: vals }))} />
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
               <span style={{ color: "#94a3b8" }}>Age:</span>
               <input type="number" placeholder="Min" value={filters.ageMin} onChange={(e) => setFilters((f) => ({ ...f, ageMin: e.target.value }))}
@@ -1358,7 +1397,7 @@ export default function Dashboard() {
             <button onClick={() => {
               const ages = rawData ? rawData.map((r) => num(r.age)).filter((v) => v !== null) : [];
               setFilters({
-                gender: "all", education: "all", location: "all", licence: "all",
+                gender: "all", education: "all", location: "all", licence: [],
                 ageMin: ages.length ? String(Math.floor(Math.min(...ages))) : "",
                 ageMax: ages.length ? String(Math.ceil(Math.max(...ages))) : "",
               });
